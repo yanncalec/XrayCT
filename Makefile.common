@@ -1,0 +1,76 @@
+# -*- Makefile -*- #
+
+CC = gcc
+CXX = g++-4.4
+NVCC = nvcc
+MAKE = make
+MEX = mex
+MEXSUFFIX = mexa64
+
+PYTHON_VERSION = 2.6	
+#LINKFLAGS = -shared -Wl,--export-dynamic
+LINKFLAGS = -shared
+# CFLAGS = -O2 -Wall -fPIC -g -Wno-deprecated #-pedantic
+#CFLAGS = -Wall -fPIC -Wno-deprecated #-pedantic
+CFLAGS = -O2 -fPIC #-Wno-deprecated #-pedantic
+
+# Manually installed libraries
+INCLUDE = $(HOME)/include
+LIB = $(HOME)/lib
+
+# Modify this line first : Codes=the directory containning T2D
+CODES = $(HOME)/Codes
+T2D = $(CODES)/T2D
+
+INC_T2D = $(T2D)/include
+KER_T2D = $(T2D)/kernel
+SRC_T2D = $(T2D)/src
+LIB_T2D = $(HOME)/lib/T2D
+OBJ_T2D = $(HOME)/tmp
+BIN_T2D = $(HOME)/bin/T2D
+
+# location of the Boost Python include files and library
+INC_NUMPY = $(shell python$(PYTHON_VERSION) -c 'import numpy; print numpy.get_include()')
+INC_PYTHON = $(shell python$(PYTHON_VERSION) -c 'import distutils.sysconfig; print distutils.sysconfig.get_python_inc()')
+
+INC_EIGEN = $(INCLUDE)/eigen
+
+INC_CIMG = $(INCLUDE)/CImg
+#LIB_CIMG = -lX11 -lpthread
+
+INC_TCLAP = $(INCLUDE)
+
+INC_CUDA = /usr/local/cuda/include
+LIB_CUDA = /usr/local/cuda/lib64
+NVCCFLAGS = -gencode arch=compute_20,code=sm_20 -Xcompiler="-fPIC $(MACROS)" -w
+
+INC_GSL = /usr/include
+LIB_GSL = /usr/lib
+
+# Settings used when I was in CEA 
+# ifeq ($(SYSNAME), home)
+# 	INC_CUDA = /usr/local/cuda/include
+# 	LIB_CUDA = /usr/local/cuda/lib64
+# 	NVCCFLAGS = -gencode arch=compute_20,code=sm_20 -Xcompiler="-fPIC $(MACROS)" -w
+
+# 	INC_GSL = /usr/include
+# 	LIB_GSL = /usr/lib
+# endif
+
+# ifeq ($(SYSNAME), lami3)
+# 	INC_CUDA = /usr/include/
+# 	LIB_CUDA = /usr/lib64
+# 	NVCCFLAGS = -gencode arch=compute_20,code=sm_20 -Xcompiler="-fPIC -fpermissive $(MACROS)" -w
+
+# 	INC_GSL = /usr/include
+# 	LIB_GSL = /usr/lib
+# endif
+
+# ifeq ($(SYSNAME), sstm8)
+# 	INC_CUDA = /usr/include/cuda/
+# 	LIB_CUDA = /usr/lib64
+# 	NVCCFLAGS = -gencode arch=compute_13,code=sm_13 -Xcompiler="-fPIC $(MACROS)" -w
+
+# 	INC_GSL = /usr/include/
+# 	LIB_GSL = /usr/lib64
+# endif

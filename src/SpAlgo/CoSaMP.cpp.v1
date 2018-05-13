@@ -1,0 +1,192 @@
+#include "SpAlgo.hpp"
+#include "BlobProjector.hpp"
+
+namespace SpAlgo {
+  ConvMsg CoSaMP(LinOp &A, const ArrayXd &Y, ArrayXd &X,  double sparsity, 
+		 double tol, int maxIter, double cgtol, int cgmaxIter, int verbose)
+  {
+    // A : system operator
+    // Y : data in vector form
+    // W : weight for L1 norm
+    // X : initialization in vector form, output is rewritten on X
+    // mu : L1 fidelity penalty, the most important argument, should be set according to noise level, nbProj, pixDet, sizeObj, and nbNode
+    // tol : iteration tolerance
+    // maxIter : maximum iteration steps
+    // verbose : display convergence message
+
+    if (verbose>0) {
+      cout<<"-----Sparse recovery by CoSaMP method-----"<<endl;
+      cout<<"Parameters :"<<endl;
+      cout<<"Desired main support sparsity : "<<sparsity<<endl;
+      cout<<"Max. iterations : "<<maxIter<<endl;
+      cout<<"Stopping tolerance : "<<tol<<endl;
+      cout<<"CG max. iterations : "<<cgmaxIter<<endl;
+      cout<<"CG stopping tolerance : "<<cgtol<<endl;
+    }
+
+    // BlobImage *BI = dynamic_cast<BlobImage *>(const_cast<LinOp *>(&A));
+    // if (BI==NULL)
+    //   cout<<"Conversion failed : LinOp -> BlobImage"<<endl;
+
+    BlobProjector *P = dynamic_cast<BlobProjector *>(const_cast<LinOp *>(&A));
+    // Used only by general projector
+    DiagOp M(X.size(), 1.);
+    CompOp *AM = new CompOp(&A, &M);
+    AtAOp L(AM);
+
+    int sFreq = 10;		// Check the support change every sFreq iterations.
+    int Freq = 1;		// print message every Freq iterations.
+
+    ArrayXd X0, dX;
+    X0 = X;			
+  
+    ArrayXd AX = A.forward(X);
+
+    ArrayXd gradX;
+    gradX.setZero(X.size());
+
+    double RdX = 1.; // Relative change in X, iteration stopping criteria
+    int niter = 0;	 // Counter for iteration
+
+    double res;			   // Residual of data 
+    double nL1;			   // L1 norm of X
+    double nL0;			   // L0 norm of X
+    double nY = Y.matrix().norm(); // norm of Y
+    double vobj;		   // value of objective function 1/2|Ax-y|^2 + |x|_1
+    double tau = 1., tau0=1.;
+
+    ArrayXi XSupp, GSupp;		// Support of X
+
+    const int nnz = (int)ceil(X.size() * sparsity);
+    bool converged = false;
+
+    double scaling = P->get_scaling();
+    double spa0 = 1;
+    if (P!=NULL) {
+      spa0 = (1+scaling) / (1+pow(scaling, P->get_nbScale()+1));
+      spa0 = (sparsity<spa0) ? sparsity/spa0 : 1;
+    }
+    //while (niter < maxIter and RdX > tol and (!debias or Mdiff > 0)) {    
+    while (niter < maxIter and not converged) {    
+      // Proxy gradient vector
+      A.backward(AX-Y, gradX);
+      // The first 2*nnz largest coefficients
+      GSupp = SpAlgo::NApprx_support(gradX, 2*nnz);
+      
+      // Uninon of supports
+      if (P!=NULL) {
+	ArrayXd toto = P->prod_mask(X, scaling, spa0);
+	XSupp = (toto>0).select(1, ArrayXi::Zero(X.size()));
+      }
+      else {
+	XSupp = SpAlgo::NApprx_support(X, nnz);
+      }
+      ArrayXi toto = GSupp + XSupp; 
+
+      // Solve the least square problem with the support GSupp+XSupp
+      X.setZero();
+      if (P==NULL) {
+	//ArrayXd S = SpAlgo::NApprx_support_double(X, nnz);
+	ArrayXd S = (toto>0).select(1, ArrayXd::Zero(X.size()));
+	M.set_a(S);
+	//LinSolver::Solver_normal_CG(A, Y, X, 100, 1e-2, &MSupp, verbose);
+	LinSolver::Solver_CG(L, AM->backward(Y), X, cgmaxIter, cgtol, false);
+      }
+      else {
+	vector<ArrayXi> totoS = P->separate(toto);
+	vector<ArrayXb> S; S.resize(totoS.size());
+	for (int n=0; n<totoS.size(); n++) {
+	  S[n] = (totoS[n]>0).select(true, ArrayXb::Constant(totoS[n].size(), false));
+	}
+	
+	P->set_maskBlob(S);
+	AtAOp L(P);
+	LinSolver::Solver_CG(L, P->backward(Y), X, cgmaxIter, cgtol, false);
+	P->reset_maskBlob();
+	if (verbose)
+	  P->sparsity(X);
+      }      
+
+      // Prune X to keep the nnz largest coefficients
+      if (P!=NULL) {
+	ArrayXd toto = P->prod_mask(X, scaling, spa0);
+	XSupp = (toto>0).select(1, ArrayXi::Zero(X.size()));
+      }
+      else {
+	XSupp = SpAlgo::NApprx_support(X, nnz);
+      }
+      X = (XSupp==0).select(0, X);
+
+      A.forward(X, AX);
+
+      dX = X - X0;
+      X0 = X;
+
+      RdX = (niter==0) ? 1. : (dX).matrix().norm() / X0.matrix().norm();
+
+      // if (niter % sFreq == 0) {
+      // 	// Support changement of X
+      // 	if (stol>0) {
+      // 	  XSupp = (X.abs()>0).select(1, ArrayXi::Zero(X.size()));
+      // 	  Xdiff = (XSupp0 - XSupp).abs().sum();
+      // 	  XSupp0 = XSupp;
+      // 	  rXdiff = Xdiff*1./X.size();
+      // 	  converged = rXdiff<stol;
+      // 	}
+
+      // 	if (sparsity > 0) {
+      // 	  MSupp = SpAlgo::NApprx_support(X, nnz);
+      // 	  Mdiff = (MSupp0 - MSupp).abs().sum();
+      // 	  MSupp0 = MSupp;
+      // 	  rMdiff = Mdiff*1./X.size();
+      // 	}
+      // }
+
+      converged = converged or (RdX < tol);
+
+      // Print convergence information
+      if (verbose>0 and niter % Freq == 0) {	
+	res = (AX-Y).matrix().norm();
+	nL1 = X.abs().sum();
+	nL0 = Tools::l0norm(X);
+
+	printf("Iteration : %d\tRdX = %1.5e\tres = %1.5e\tL1 norm = %1.5e\tnon zero per. = %1.5e\n", niter, RdX, res, nL1, nL0/X.size());
+      }
+      niter++;
+    }
+
+    if (verbose>0 and not converged)
+      cout<<"CoSaMP terminated without convergence."<<endl;
+
+    nL1 = X.abs().sum();
+    res = (AX-Y).matrix().norm();
+    return ConvMsg(niter, 0, res, nL1);
+  }
+}
+
+
+// The following is the IST algorithm (slower)
+
+    // while (niter < maxIter and RdX > tol) {    
+    //   A.backward(AX-Y, gradX);
+
+    //   if (niter == 0) { // Do steepest descent at 1st iteration
+    // 	// Gradient of AL function      
+    // 	ArrayXd AgradX = A.forward(gradX);
+    // 	gradstep = (gradX*gradX).sum() / (AgradX*AgradX).sum();
+    //   }
+    //   else {
+    // 	// Set gradstep through BB formula
+    // 	dgradX = gradX - gradX0;
+    // 	gradstep = (dX * dX).sum() / (dX * dgradX).sum();
+    //   }
+      
+    //   X = l1_shrink(X - gradstep * gradX, gradstep*mu, W);
+
+    //   A.forward(X, AX);  
+    //   dX = X - X0;
+    //   X0 = X;
+    //   gradX0 = gradX;
+
+    //   RdX = (niter==0) ? 1. : (dX).matrix().norm() / X0.matrix().norm();
+    // }

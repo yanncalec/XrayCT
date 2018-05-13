@@ -1,0 +1,3 @@
+This is a C library of 2D On-The-Fly projectors.
+Run make to compile and link the shared library.
+This library can be called from C++, see examples in script/SgSim.cpp.

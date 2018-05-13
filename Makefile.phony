@@ -1,0 +1,7 @@
+.PHONY : clean
+clean :
+	@rm -rf $(OBJ_T2D)/*.o $(OBJ_T2D)/*.so $(OBJ_T2D)/*.out $(OBJ_T2D)/*.run
+
+.PHONY : echo
+echo :
+	@echo $(OBJ_T2D) $(SRC) $(TARGET) $(HEAD) $(T2D)

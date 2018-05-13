@@ -1,0 +1,24 @@
+#!/bin/bash
+
+if [ $# -lt 1 ]; then
+    echo "Usage : $0 sysname (home/sstm8/lami3)"
+    exit 0
+fi
+
+if [ $1 == "home" ]; then
+    #ln -sf Makefile.common.home Makefile.common
+    export SYSNAME=home
+elif [ $1 == "sstm8" ]; then
+    #ln -sf Makefile.common.sstm8 Makefile.common
+    export SYSNAME=sstm8
+elif [ $1 == "lami3" ]; then
+    #ln -sf Makefile.common.lami3 Makefile.common
+    export SYSNAME=lami3
+else
+    echo "Usage : $0 sysname (home/sstm8/lami3)"
+    exit 0
+fi
+
+make -j -B -C src
+make -j -B -C src/T2DProjector
+make -j -B -C script
